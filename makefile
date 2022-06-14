@@ -1,6 +1,6 @@
 # Virtual Environment
-VENV_POETRY		:= poetry run
-FILE_TOML		:= pyproject.toml
+VENV_POETRY	:= poetry run
+FILE_TOML	:= pyproject.toml
 
 ifneq (,$(wildcard ./.env))
     include .env

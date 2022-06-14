@@ -24,10 +24,6 @@ build-backend = "poetry.core.masonry.api"
 line-length = 88
 target_version = ['py310']
 include = '\.pyi?$'
-extend-exclude = '''
-build
-deploy
-'''
 
 [tool.isort]
 line_length = 88

@@ -38,7 +38,7 @@ class Stacker(Generic[EnumStackLayerT, EnumStackOrderT, StackableT]):
         for order in self.__orders:
             yield self.__order_modifier(order), self.stack(order)
 
-    def stack(self, order: EnumStackOrderT) -> StackableT:
+    def stack(self, order: EnumStackOrderT, /) -> StackableT:
 
         return reduce(
             self.__func_stack,

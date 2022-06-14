@@ -1,0 +1,58 @@
+[tool.poetry]
+name = "lazy_pattern"
+version = "0.1.0"
+description = ""
+authors = ["RainrainWu <s0958334772@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+[tool.poetry.dev-dependencies]
+black = "^22.3.0"
+isort = "^5.10.1"
+pytest = "^7.1.2"
+pytest-cov = "^3.0.0"
+bandit = "^1.7.4"
+safety = "^1.10.3"
+pytest-xdist = "^2.5.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target_version = ['py310']
+include = '\.pyi?$'
+extend-exclude = '''
+build
+deploy
+'''
+
+[tool.isort]
+line_length = 88
+indent = '    '
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+src_paths = ['lazy_pattern', 'tests']
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q -n auto --disable-warnings"
+testpaths = [
+    "tests",
+]
+
+[tool.coverage.report]
+fail_under = 90
+skip_covered = true
+skip_empty = true
+
+[tool.bandit]
+targets = [
+    "lazy_pattern",
+]
+exclude_dirs = [
+    "tests",
+]

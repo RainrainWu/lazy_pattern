@@ -11,6 +11,7 @@ endif
 lint:
 	$(VENV_POETRY) black .
 	$(VENV_POETRY) isort .
+	$(VENV_POETRY) mypy .
 
 .PHONY: test
 test:

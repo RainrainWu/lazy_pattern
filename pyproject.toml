@@ -7,14 +7,15 @@ authors = ["RainrainWu <s0958334772@gmail.com>"]
 [tool.poetry.dependencies]
 python = "^3.10"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 black = "^22.3.0"
 isort = "^5.10.1"
+mypy = "^0.961"
 pytest = "^7.1.2"
 pytest-cov = "^3.0.0"
+pytest-xdist = "^2.5.0"
 bandit = "^1.7.4"
 safety = "^1.10.3"
-pytest-xdist = "^2.5.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

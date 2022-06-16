@@ -4,10 +4,10 @@ from typing import Dict
 
 import pytest
 
-from lazy_pattern.stacker import Stacker
+from lazy_pattern.event_sourcer import EventSourcer
 
 
-class EnumLayer(Enum):
+class EventLabel(Enum):
 
     MORE_ICE = "more ice"
     LESS_ICE = "less ice"
@@ -22,40 +22,48 @@ class EnumLayer(Enum):
     GRANDE = "grande"
 
 
-class EnumOrder(Enum):
+class OrderLabel(Enum):
 
     RECOMMEND = "recommend"
     POPULAR = "popular"
 
 
-class TestStacker:
-    class StackerUnitTest(Stacker[EnumLayer, EnumOrder, Dict]):
+class TestEventSourcer:
+    class EventSourceUnitTest(EventSourcer[EventLabel, OrderLabel, Dict]):
         pass
 
     LAYERS = {
-        EnumLayer.MORE_ICE: {"ice": "more ice"},
-        EnumLayer.LESS_ICE: {"ice": "less ice"},
-        EnumLayer.ICE_FREE: {"ice": "ice-free"},
-        EnumLayer.FULL_SUGAR: {"sugar": "full sugar"},
-        EnumLayer.HALF_SUGAR: {"sugar": "half sugar"},
-        EnumLayer.SUGAR_FREE: {"sugar": "sugar-free"},
-        EnumLayer.SHORT: {"size": "short"},
-        EnumLayer.TALL: {"size": "tall"},
-        EnumLayer.GRANDE: {"size": "grande"},
+        EventLabel.MORE_ICE: {"ice": "more ice"},
+        EventLabel.LESS_ICE: {"ice": "less ice"},
+        EventLabel.ICE_FREE: {"ice": "ice-free"},
+        EventLabel.FULL_SUGAR: {"sugar": "full sugar"},
+        EventLabel.HALF_SUGAR: {"sugar": "half sugar"},
+        EventLabel.SUGAR_FREE: {"sugar": "sugar-free"},
+        EventLabel.SHORT: {"size": "short"},
+        EventLabel.TALL: {"size": "tall"},
+        EventLabel.GRANDE: {"size": "grande"},
     }
 
     ORDERS = {
-        EnumOrder.RECOMMEND: [EnumLayer.LESS_ICE, EnumLayer.SUGAR_FREE, EnumLayer.TALL],
-        EnumOrder.POPULAR: [EnumLayer.ICE_FREE, EnumLayer.HALF_SUGAR, EnumLayer.TALL],
+        OrderLabel.RECOMMEND: [
+            EventLabel.LESS_ICE,
+            EventLabel.SUGAR_FREE,
+            EventLabel.TALL,
+        ],
+        OrderLabel.POPULAR: [
+            EventLabel.ICE_FREE,
+            EventLabel.HALF_SUGAR,
+            EventLabel.TALL,
+        ],
     }
 
     RESULTS = {
-        EnumOrder.RECOMMEND: {
+        OrderLabel.RECOMMEND: {
             "ice": "less ice",
             "sugar": "sugar-free",
             "size": "tall",
         },
-        EnumOrder.POPULAR: {
+        OrderLabel.POPULAR: {
             "ice": "ice-free",
             "sugar": "half sugar",
             "size": "tall",
@@ -63,31 +71,29 @@ class TestStacker:
     }
 
     @pytest.fixture(scope="class", autouse=True)
-    def fixture_stacker(self):
+    def fixture_sourcer(self):
 
-        yield TestStacker.StackerUnitTest(
-            TestStacker.LAYERS,
-            TestStacker.ORDERS,
-            lambda: {},
-            or_,
-            order_modifier=lambda e: f"coffee {e.value}",
-        )
+        event_sourcer = self.EventSourceUnitTest(self.LAYERS, (), lambda: {}, or_)
+        for order, event_labels in self.ORDERS.items():
+            event_sourcer.register(order, event_labels)
 
-    @pytest.mark.parametrize("key", [order for order in EnumOrder])
-    def test_getitem(self, key, fixture_stacker):
+        yield event_sourcer
 
-        assert fixture_stacker[key] == self.ORDERS[key]
+    @pytest.mark.parametrize("key", [order for order in OrderLabel])
+    def test_getitem(self, key, fixture_sourcer):
 
-    def test_len(self, fixture_stacker):
+        assert fixture_sourcer[key] == self.ORDERS[key]
 
-        assert len(fixture_stacker) == len(self.ORDERS)
+    def test_len(self, fixture_sourcer):
 
-    def test_iter(self, fixture_stacker):
+        assert len(fixture_sourcer) == len(self.ORDERS)
 
-        expected = {f"coffee {k.value}": v for k, v in self.RESULTS.items()}
-        assert {k: v for k, v in fixture_stacker} == expected
+    def test_iter(self, fixture_sourcer):
 
-    @pytest.mark.parametrize("order", [order for order in EnumOrder])
-    def test_stack(self, order, fixture_stacker):
+        expected = {k: v for k, v in self.RESULTS.items()}
+        assert {k: v for k, v in fixture_sourcer} == expected
 
-        assert fixture_stacker.stack(order) == self.RESULTS[order]
+    @pytest.mark.parametrize("order", [order for order in OrderLabel])
+    def test_source(self, order, fixture_sourcer):
+
+        assert fixture_sourcer.source_by_order(order) == self.RESULTS[order]

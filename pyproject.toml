@@ -34,6 +34,10 @@ include_trailing_comma = true
 force_grid_wrap = 0
 src_paths = ['lazy_pattern', 'tests']
 
+[tool.mypy]
+show_error_codes = true
+ignore_errors = true
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-ra -q -n auto --disable-warnings"

@@ -1,16 +1,15 @@
 from abc import ABC, abstractmethod
+from collections import Counter
 from enum import Enum
 from functools import reduce
-from operator import itemgetter
-from typing import Callable, Counter, Dict, Generic, Iterable, Tuple, TypeVar
+from itertools import permutations
+from operator import itemgetter, or_
+from typing import Callable, Generic, Iterable, TypeVar
+
+from lazy_pattern.error import LazyPatternError
 
 EventLabelT = TypeVar("EventLabelT", bound=Enum)
-OrderLabelT = TypeVar("OrderLabelT", bound=Enum)
 SourceableT = TypeVar("SourceableT")
-
-
-class LazyPatternError(Exception):
-    pass
 
 
 class EventSourcingConstraintError(LazyPatternError):
@@ -26,7 +25,7 @@ class ConstrainMode(Enum):
 
 class AbstractConstrainable(ABC, Generic[EventLabelT]):
     @abstractmethod
-    def constrain(self, event_labels: tuple[EventLabelT]) -> None:
+    def constrain(self, event_labels: tuple[EventLabelT, ...]) -> None:
         pass
 
 
@@ -35,16 +34,16 @@ class SourcingConstraint(AbstractConstrainable):
     pass
 
 
-class MutuallyExclusiveConstraint(SourcingConstraint):
+class MutuallyExclusiveConstraint(SourcingConstraint, Generic[EventLabelT]):
     def __init__(
         self,
-        events_constrained: set[EventLabelT],
+        events_constrained: Iterable[EventLabelT],
         /,
     ) -> None:
 
-        self.__events_constrained = events_constrained
+        self.__events_constrained = set(events_constrained)
 
-    def constrain(self, event_labels: tuple[EventLabelT], /) -> None:
+    def constrain(self, event_labels: tuple[EventLabelT, ...], /) -> None:
 
         catch_events = self.__events_constrained.intersection(set(event_labels))
         if len(catch_events) > 1:
@@ -56,23 +55,30 @@ class MutuallyExclusiveConstraint(SourcingConstraint):
 class OccurrenceConstraint(SourcingConstraint, Generic[EventLabelT]):
     def __init__(
         self,
-        events_constrained: set[EventLabelT],
+        events_constrained: Iterable[EventLabelT],
         /,
         *,
         min_times: int = 0,
         max_times: int = 1,
     ) -> None:
 
-        self.events_constrained = events_constrained
+        self.events_constrained = set(events_constrained)
+
         self.min_times = min_times
         self.max_times = max_times
 
-    def constrain(self, event_labels: tuple[EventLabelT], /) -> None:
+    def constrain(self, event_labels: tuple[EventLabelT, ...], /) -> None:
 
         event_counter = Counter(event_labels)
         event_occurred = self.events_constrained.intersection(set(event_labels))
-        occurrence = sum(itemgetter(*event_occurred)(event_counter))
-        if not (self.min_times < occurrence < self.max_times):
+
+        try:
+            counts = itemgetter(*event_occurred)(event_counter)
+            occurrence = counts if isinstance(counts, int) else sum(counts)
+        except TypeError:
+            occurrence = 0
+
+        if not (self.min_times <= occurrence <= self.max_times):
             raise EventSourcingConstraintError(
                 f"constrain error due to occurrence times {occurrence}"
             )
@@ -81,20 +87,22 @@ class OccurrenceConstraint(SourcingConstraint, Generic[EventLabelT]):
 class DependencyConstraint(SourcingConstraint, Generic[EventLabelT]):
     def __init__(
         self,
-        events_constrained: set[EventLabelT],
-        events_constraints: set[EventLabelT] = set(),
+        events_constrained: Iterable[EventLabelT],
+        events_constraints: Iterable[EventLabelT] = set(),
         /,
     ) -> None:
 
-        if intersection := events_constrained.intersection(events_constraints):
+        self.events_constrained = set(events_constrained)
+        self.events_constraints = set(events_constraints)
+
+        if intersection := self.events_constrained.intersection(
+            self.events_constraints
+        ):
             raise EventSourcingConstraintError(
                 f"invalid dependency with intersection {intersection}"
             )
 
-        self.events_constrained = events_constrained
-        self.events_constraints = events_constraints
-
-    def constrain(self, event_labels: tuple[EventLabelT], /) -> None:
+    def constrain(self, event_labels: tuple[EventLabelT, ...], /) -> None:
 
         constraints_found = None
         for event in event_labels:
@@ -106,13 +114,13 @@ class DependencyConstraint(SourcingConstraint, Generic[EventLabelT]):
                 constraints_found = event
 
 
-class EventSourcer(Generic[EventLabelT, OrderLabelT, SourceableT]):
+class EventSourcer(Generic[EventLabelT, SourceableT]):
     def __init__(
         self,
         events: dict[EventLabelT, SourceableT],
-        constraints: tuple[SourcingConstraint],
-        func_get_base: Callable[[], SourceableT],
-        func_source: Callable[[SourceableT, SourceableT], SourceableT],
+        constraints: tuple[()] | tuple[AbstractConstrainable] = (),
+        func_get_base: Callable[[], SourceableT] = lambda: {},
+        func_source: Callable[[SourceableT, SourceableT], SourceableT] = or_,
         /,
     ) -> None:
 
@@ -121,32 +129,39 @@ class EventSourcer(Generic[EventLabelT, OrderLabelT, SourceableT]):
         self.func_get_base = func_get_base
         self.func_source = func_source
 
-        self.registered_orders: Dict[OrderLabelT, tuple[EventLabelT]] = {}
+    def __getitem__(self, key: EventLabelT) -> SourceableT:
 
-    def __getitem__(self, key: OrderLabelT) -> tuple[EventLabelT]:
-
-        return self.registered_orders[key]
+        return self.events[key]
 
     def __len__(self) -> int:
 
-        return len(self.registered_orders)
+        return len(self.events)
 
-    def __iter__(self) -> Iterable[tuple[OrderLabelT, SourceableT]]:
+    def __iter__(self) -> Iterable[tuple[EventLabelT, SourceableT]]:
 
-        for order in self.registered_orders:
-            yield order, self.source_by_order(order)
+        for key, val in self.events.items():
+            yield key, val
 
-    def register(self, order: OrderLabelT, event_labels: tuple[EventLabelT], /):
+    def exhaustive(self) -> Iterable[tuple[tuple[EventLabelT, ...], SourceableT]]:
 
-        self.registered_orders[order] = event_labels
+        for length in range(len(self.events) + 1):
+            for candidate in permutations(self.events, length):
+                try:
+                    self.validate(candidate)
+                    yield candidate, self.source(candidate)
+                except EventSourcingConstraintError:
+                    continue
 
-    def source(self, event_labels: tuple[EventLabelT]):
+    def validate(self, event_labels: tuple[EventLabelT, ...]) -> None:
+
+        for constraint in self.constraints:
+            constraint.constrain(event_labels)
+
+    def source(self, event_labels: tuple[EventLabelT, ...]):
+
+        self.validate(event_labels)
 
         return reduce(
             self.func_source,
             [self.func_get_base()] + [self.events[label] for label in event_labels],
         )
-
-    def source_by_order(self, order: OrderLabelT, /) -> SourceableT:
-
-        return self.source(self.registered_orders[order])

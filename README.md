@@ -46,9 +46,6 @@ for order, result in source.exhaustive():
 5. Or even filter out unreasonable recipes via constraints!
 ```python
 CONSTRAINTS= {
-    MuallyExclusiveConstraint[EventLabel](
-        {EventLabel.SHORT, EventLabel.TALL, EventLabel.GRANDE},
-    ),
     MutuallyExclusiveConstraint[EventLabel](
         {EventLabel.FULL_SUGAR, EventLabel.HALF_SUGAR, EventLabel.SUGAR_FREE},
     ),

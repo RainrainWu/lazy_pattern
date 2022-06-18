@@ -1,0 +1,2 @@
+class LazyPatternError(Exception):
+    pass

@@ -6,6 +6,7 @@ authors = ["RainrainWu <s0958334772@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
+pydantic = "^1.9.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^22.3.0"

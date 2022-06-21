@@ -1,6 +1,8 @@
+import asyncio
 from abc import ABC, abstractmethod
 from asyncio import Lock
 from collections import deque
+from contextlib import asynccontextmanager
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Generic, Iterable, TypeVar
@@ -13,6 +15,10 @@ PoolMemberT = TypeVar("PoolMemberT")
 
 
 class ObjectPoolOverloadError(LazyPatternError):
+    pass
+
+
+class ObjectPoolOperationError(LazyPatternError):
     pass
 
 
@@ -45,6 +51,10 @@ class ObjectPoolConfig(BaseModel, Generic[PoolMemberT]):
     desired: conint(strict=True, ge=0) = Field(default=10)
     min_size: conint(strict=True, ge=0) = Field(default=5)
     max_size: conint(strict=True, ge=0) = Field(default=20)
+
+    retry_times: conint(strict=True, ge=0) = Field(default=5)
+    retry_interval: conint(strict=True, ge=0) = Field(default=1)
+    retry_exp: conint(strict=True, ge=0) = Field(default=2)
 
 
 class ObjectPool(Generic[PoolMemberT]):
@@ -90,8 +100,8 @@ class ObjectPool(Generic[PoolMemberT]):
 
         return wrapper
 
-    def regulate_factory(self, usage_delta: int) -> Callable[[Callable]]:
-        def regulate(func: Callable, /) -> Any:
+    def regulate(usage_delta: int) -> Callable[[Callable], Any]:
+        def regulate_wrapper(func: Callable, /) -> Any:
             @wraps(func)
             async def wrapper(self, *args, **kwargs):
 
@@ -100,13 +110,15 @@ class ObjectPool(Generic[PoolMemberT]):
 
             return wrapper
 
-        return regulate
+        return regulate_wrapper
 
     def calculate_utilization(self, usage: int, total: int, /) -> float:
+        if not total:
+            return 0.0
         return round(usage / total, 2)
 
     @async_lock
-    async def plan(self, delta: int) -> int:
+    async def plan(self, delta: int, /) -> int:
 
         expected_usage, planned_scale = len(self.busy) + delta, 0
 
@@ -127,7 +139,7 @@ class ObjectPool(Generic[PoolMemberT]):
         return max(planned_scale, self.config.min_size - self.size)
 
     @async_lock
-    async def scale(self, size: int) -> None:
+    async def scale(self, size: int, /) -> None:
 
         if self.is_cooling or not size:
             return
@@ -142,16 +154,47 @@ class ObjectPool(Generic[PoolMemberT]):
                 produced.clean_up()
                 self.idle.append(produced)
 
+    @asynccontextmanager
+    async def lease(self):
 
-class PoolMember(AbstractRecyclable):
-    def set_up(self, *args, **kwargs) -> None:
-        pass
+        leased_object = await self.fetch()
+        try:
+            yield leased_object
+        finally:
+            await self.remand(leased_object)
 
-    def clean_up(self, *args, **kwargs) -> None:
-        pass
+    @regulate(1)
+    async def fetch(self):
 
+        retry_count, retry_interval = (0, self.config.retry_interval)
+        while retry_count < self.config.retry_times:
 
-x = ObjectPool[PoolMember](ObjectPoolConfig(func_produce=lambda: PoolMember()))
-print(len(x))
-x.scale(-3)
-print(len(x))
+            async with self.lock:
+                if self.idle:
+                    pick = self.idle.popleft()
+                    self.busy.append(pick)
+                    return pick
+
+            if retry_count < self.config.retry_times - 1:
+                await asyncio.sleep(retry_interval)
+
+            retry_count += 1
+            retry_interval *= self.config.retry_exp
+
+        raise ObjectPoolOverloadError
+
+    @regulate(-1)
+    async def remand(self, pool_member: PoolMemberT, /):
+
+        if pool_member not in self.busy:
+            raise ObjectPoolOperationError
+
+        async with self.lock:
+            pool_member.clean_up()
+            self.busy.remove(pool_member)
+            self.idle.append(pool_member)
+
+    @async_lock
+    async def project(self, func_project: Callable[[PoolMemberT], Any], /):
+
+        return list(map(func_project, self.idle + self.busy))

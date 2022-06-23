@@ -1,10 +1,10 @@
+import os
 from abc import ABC, abstractmethod
 from collections import Counter
 from enum import Enum
 from functools import lru_cache
 from itertools import permutations
 from operator import itemgetter, or_
-import os
 from typing import Callable, Generic, Iterable, TypeVar
 
 from lazy_pattern.error import LazyPatternError
@@ -13,7 +13,6 @@ EVENT_SOURCER_CACHE_SIZE = os.environ.get("EVENT_SOURCER_CACHE_SIZE", 1024)
 
 EventLabelT = TypeVar("EventLabelT", bound=Enum)
 SourceableT = TypeVar("SourceableT")
-
 
 
 class EventSourcerConstraintError(LazyPatternError):

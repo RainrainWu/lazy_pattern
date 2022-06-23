@@ -40,9 +40,12 @@ ignore_errors = true
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q -n auto --disable-warnings"
+addopts = "-ra -q -n auto --asyncio-mode=strict"
 testpaths = [
     "tests",
+]
+filterwarnings = [
+    "ignore::ResourceWarning"
 ]
 
 [tool.coverage.report]

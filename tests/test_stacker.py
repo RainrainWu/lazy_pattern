@@ -10,7 +10,7 @@ import pytest
 from lazy_pattern.event_sourcer import (
     DependencyConstraint,
     EventSourcer,
-    EventSourcingConstraintError,
+    EventSourcerConstraintError,
     MutuallyExclusiveConstraint,
     OccurrenceConstraint,
 )
@@ -75,7 +75,7 @@ class TestSourcingConstraint:
         self, event_labels, fixture_mutually_exclusive_constraint
     ):
 
-        with pytest.raises(EventSourcingConstraintError):
+        with pytest.raises(EventSourcerConstraintError):
             fixture_mutually_exclusive_constraint.constrain(event_labels)
 
     @pytest.mark.parametrize(
@@ -92,7 +92,7 @@ class TestSourcingConstraint:
     )
     def test_occurrence_invalid(self, event_labels, fixture_occurrence_constraint):
 
-        with pytest.raises(EventSourcingConstraintError):
+        with pytest.raises(EventSourcerConstraintError):
             fixture_occurrence_constraint.constrain(event_labels)
 
     def test_dependency(self, fixture_dependency_constraint):
@@ -113,12 +113,12 @@ class TestSourcingConstraint:
         shuffle(event_labels)
         event_labels.insert(randint(1, len(event_labels)), size_event)
 
-        with pytest.raises(EventSourcingConstraintError):
+        with pytest.raises(EventSourcerConstraintError):
             fixture_dependency_constraint.constrain(event_labels)
 
     def test_dependency_intersect(self):
 
-        with pytest.raises(EventSourcingConstraintError):
+        with pytest.raises(EventSourcerConstraintError):
             DependencyConstraint(self.SIZE_EVENTS, EventLabel)
 
 
@@ -139,16 +139,16 @@ class TestEventSourcer:
     }
 
     ORDERS = {
-        OrderLabel.RECOMMEND: [
+        OrderLabel.RECOMMEND: (
             EventLabel.LESS_ICE,
             EventLabel.SUGAR_FREE,
             EventLabel.TALL,
-        ],
-        OrderLabel.POPULAR: [
+        ),
+        OrderLabel.POPULAR: (
             EventLabel.ICE_FREE,
             EventLabel.HALF_SUGAR,
             EventLabel.TALL,
-        ],
+        ),
     }
 
     RESULTS = {
@@ -167,7 +167,7 @@ class TestEventSourcer:
     @pytest.fixture(scope="class", autouse=True)
     def fixture_sourcer(self):
 
-        yield self.EventSourcerUnitTest(self.EVENTS, (), lambda: {}, or_)
+        yield self.EventSourcerUnitTest(self.EVENTS, (), or_)
 
     @pytest.mark.parametrize("key", [event for event in EventLabel])
     def test_getitem(self, key, fixture_sourcer):

@@ -162,12 +162,13 @@ class EventSourcer(Generic[EventLabelT, SourceableT]):
 
         self.validate(event_labels)
 
-        return self._source(event_labels)
+        return self._source(tuple(event_labels))
 
     @lru_cache(maxsize=EVENT_SOURCER_CACHE_SIZE)
     def _source(self, event_labels: tuple[EventLabelT, ...]) -> SourceableT:
 
         if not event_labels:
+
             raise EventSourcerConstraintError(
                 "at least one event label should be provided"
             )

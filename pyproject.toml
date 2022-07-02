@@ -6,6 +6,7 @@ authors = ["RainrainWu <s0958334772@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
+pydantic = "^1.9.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^22.3.0"
@@ -14,6 +15,7 @@ mypy = "^0.961"
 pytest = "^7.1.2"
 pytest-cov = "^3.0.0"
 pytest-xdist = "^2.5.0"
+pytest-asyncio = "^0.18.3"
 bandit = "^1.7.4"
 safety = "^1.10.3"
 

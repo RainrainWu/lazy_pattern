@@ -15,9 +15,10 @@ from lazy_pattern.object_pool import (
 @pytest.fixture(scope="session")
 def event_loop():
     try:
-        yield asyncio.get_event_loop()
+        loop = asyncio.get_event_loop_policy().new_event_loop()
+        yield loop
     finally:
-        asyncio.get_event_loop().close()
+        loop.close()
 
 
 class TestObjectPool:
@@ -63,7 +64,7 @@ class TestObjectPool:
         async with object_pool.lease():
             assert object_pool.is_cooling
 
-        await asyncio.sleep(object_pool.config.cool_down * 1.1)
+        await asyncio.sleep(object_pool.config.cool_down * 1.2)
         assert not object_pool.is_cooling
 
     @pytest.mark.asyncio

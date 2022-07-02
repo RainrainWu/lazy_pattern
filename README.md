@@ -56,3 +56,45 @@ CONSTRAINTS= {
 
 sourcer = EventSourcer(LAYERS, CONSTRAINTS)
 ```
+
+### Object Pool
+
+1. Implement the abstract methods on your class
+.
+```python
+class Splitter(AbstractRecyclable):
+    def set_up(self, digest: str) -> None:
+
+        self.digest = digest
+
+    def clean_up(self) -> None:
+
+        self.digest = None
+
+    def show_items(self):
+
+        print(" ".join([x.strip() for x in self.digest.split(",")]))
+```
+
+2. Inherit from the base object pool.
+```python
+class PoolSplitter(ObjectPool):
+    pass
+```
+
+3. Prewarm your object pool and enjoy the managed instances!
+```python
+async def main():
+
+    pool_splitter = PoolSplitter(ObjectPoolConfig(func_produce=lambda: Splitter()))
+    await pool_splitter.prewarm()
+
+    splitter = await pool_splitter.fetch()
+    splitter.set_up("hello, world")
+    splitter.show_items()
+    await pool_splitter.remand(splitter)
+
+    async with pool_splitter.lease() as splitter:
+        splitter.set_up("hello, world, again")
+        splitter.show_items()
+```

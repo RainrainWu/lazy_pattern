@@ -1,9 +1,9 @@
 import asyncio
 
-from lazy_pattern.object_pool import ObjectPool, ObjectPoolConfig
+from lazy_pattern.object_pool import AbstractRecyclable, ObjectPool, ObjectPoolConfig
 
 
-class Splitter:
+class Splitter(AbstractRecyclable):
     def set_up(self, digest: str) -> None:
 
         self.digest = digest

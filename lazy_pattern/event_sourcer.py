@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from collections import Counter
 from enum import Enum
-from functools import lru_cache, reduce
+from functools import lru_cache
 from itertools import permutations
 from operator import itemgetter, or_
 from typing import Callable, Generic, Iterable, TypeVar
@@ -15,7 +15,7 @@ EventLabelT = TypeVar("EventLabelT", bound=Enum)
 SourceableT = TypeVar("SourceableT")
 
 
-class EventSourcingConstraintError(LazyPatternError):
+class EventSourcerConstraintError(LazyPatternError):
     pass
 
 
@@ -50,7 +50,7 @@ class MutuallyExclusiveConstraint(SourcingConstraint, Generic[EventLabelT]):
 
         catch_events = self.__events_constrained.intersection(set(event_labels))
         if len(catch_events) > 1:
-            raise EventSourcingConstraintError(
+            raise EventSourcerConstraintError(
                 f"constrain error due to mutually exclusive events {catch_events}"
             )
 
@@ -82,7 +82,7 @@ class OccurrenceConstraint(SourcingConstraint, Generic[EventLabelT]):
             occurrence = 0
 
         if not (self.min_times <= occurrence <= self.max_times):
-            raise EventSourcingConstraintError(
+            raise EventSourcerConstraintError(
                 f"constrain error due to occurrence times {occurrence}"
             )
 
@@ -101,7 +101,7 @@ class DependencyConstraint(SourcingConstraint, Generic[EventLabelT]):
         if intersection := self.events_constrained.intersection(
             self.events_constraints
         ):
-            raise EventSourcingConstraintError(
+            raise EventSourcerConstraintError(
                 f"invalid dependency with intersection {intersection}"
             )
 
@@ -110,7 +110,7 @@ class DependencyConstraint(SourcingConstraint, Generic[EventLabelT]):
         constraints_found = None
         for event in event_labels:
             if event in self.events_constrained and constraints_found:
-                raise EventSourcingConstraintError(
+                raise EventSourcerConstraintError(
                     f"constrain error due to invalid dependency {constraints_found} -> {event}"
                 )
             if event in self.events_constraints:
@@ -150,7 +150,7 @@ class EventSourcer(Generic[EventLabelT, SourceableT]):
                 try:
                     self.validate(candidate)
                     yield candidate, self.source(candidate)
-                except EventSourcingConstraintError:
+                except EventSourcerConstraintError:
                     continue
 
     def validate(self, event_labels: tuple[EventLabelT, ...]) -> None:
@@ -158,7 +158,7 @@ class EventSourcer(Generic[EventLabelT, SourceableT]):
         for constraint in self.constraints:
             constraint.constrain(event_labels)
 
-    def source(self, event_labels: tuple[EventLabelT, ...]):
+    def source(self, event_labels: tuple[EventLabelT, ...]) -> SourceableT:
 
         self.validate(event_labels)
 
@@ -168,7 +168,8 @@ class EventSourcer(Generic[EventLabelT, SourceableT]):
     def _source(self, event_labels: tuple[EventLabelT, ...]) -> SourceableT:
 
         if not event_labels:
-            raise EventSourcingConstraintError(
+
+            raise EventSourcerConstraintError(
                 "at least one event label should be provided"
             )
 

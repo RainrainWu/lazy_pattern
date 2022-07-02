@@ -155,7 +155,7 @@ class ObjectPool(Generic[PoolMemberT]):
                 else min(
                     planned_scale,
                     self.config.max_size - self.size,
-                    ceil(self.size * self.config.scale_cap)
+                    ceil(self.size * self.config.scale_cap),
                 )
             )
         return max(

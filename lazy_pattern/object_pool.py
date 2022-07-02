@@ -5,6 +5,7 @@ from collections import deque
 from contextlib import asynccontextmanager
 from enum import Enum
 from functools import wraps
+from math import ceil, floor
 from typing import Any, Callable, Generic, Iterable, TypeVar
 
 from pydantic import BaseModel, Field, confloat, conint
@@ -45,12 +46,12 @@ class ObjectPoolConfig(BaseModel, Generic[PoolMemberT]):
 
     policy: ScalingPolicy = Field(default=ScalingPolicy.ADAPTIVE)
     utilization: confloat(strict=True, ge=0, le=1) = Field(default=0.7)
-    scale_cap: confloat(strict=True, ge=0, le=1) = Field(default=0.3)
+    scale_cap: confloat(strict=True, ge=0, le=1) = Field(default=0.5)
     cool_down: conint(strict=True, ge=0) = Field(default=1)
 
-    desired: conint(strict=True, ge=0) = Field(default=10)
-    min_size: conint(strict=True, ge=0) = Field(default=5)
-    max_size: conint(strict=True, ge=0) = Field(default=20)
+    desired: conint(strict=True, ge=0) = Field(default=5)
+    min_size: conint(strict=True, ge=0) = Field(default=3)
+    max_size: conint(strict=True, ge=0) = Field(default=10)
 
     retry_times: conint(strict=True, ge=0) = Field(default=5)
     retry_interval: conint(strict=True, ge=0) = Field(default=1)
@@ -66,8 +67,6 @@ class ObjectPool(Generic[PoolMemberT]):
         self.config = config
 
         self.is_cooling = False
-
-        self.scale(self.config.desired)
 
     def __len__(self) -> int:
         return self.size
@@ -117,8 +116,20 @@ class ObjectPool(Generic[PoolMemberT]):
             return 0.0
         return round(usage / total, 2)
 
+    async def prewarm(self) -> None:
+
+        await self.scale(self.config.desired)
+
+    async def cool_down(self) -> None:
+
+        await asyncio.sleep(self.config.cool_down)
+        self.is_cooling = False
+
     @async_lock
     async def plan(self, delta: int, /) -> int:
+
+        if self.config.policy == ScalingPolicy.FIXED:
+            return 0
 
         expected_usage, planned_scale = len(self.busy) + delta, 0
 
@@ -129,20 +140,38 @@ class ObjectPool(Generic[PoolMemberT]):
             planned_scale += 1
 
         while (
-            self.calculate_utilization(expected_usage, self.size + planned_scale - 1)
-            >= self.config.utilization
+            self.size + planned_scale > 0
+            and self.calculate_utilization(
+                expected_usage, self.size + planned_scale - 1
+            )
+            < self.config.utilization
         ):
             planned_scale -= 1
 
         if planned_scale > 0:
-            return min(planned_scale, self.config.max_size - self.size)
-        return max(planned_scale, self.config.min_size - self.size)
+            return (
+                planned_scale
+                if self.config.policy == ScalingPolicy.UNLIMITED
+                else min(
+                    planned_scale,
+                    self.config.max_size - self.size,
+                    ceil(self.size * self.config.scale_cap)
+                )
+            )
+        return max(
+            planned_scale,
+            self.config.min_size - self.size,
+            -floor(self.size * self.config.scale_cap),
+        )
 
-    @async_lock
     async def scale(self, size: int, /) -> None:
 
         if self.is_cooling or not size:
             return
+
+        if size < 0 and self.config.cool_down:
+            self.is_cooling = True
+            asyncio.create_task(self.cool_down())
 
         for _ in range(abs(size)):
 
@@ -194,7 +223,6 @@ class ObjectPool(Generic[PoolMemberT]):
             self.busy.remove(pool_member)
             self.idle.append(pool_member)
 
-    @async_lock
     async def project(self, func_project: Callable[[PoolMemberT], Any], /):
 
         return list(map(func_project, self.idle + self.busy))

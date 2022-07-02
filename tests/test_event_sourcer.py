@@ -167,7 +167,7 @@ class TestEventSourcer:
     @pytest.fixture(scope="class", autouse=True)
     def fixture_sourcer(self):
 
-        yield self.EventSourcerUnitTest(self.EVENTS, (), lambda: {}, or_)
+        yield self.EventSourcerUnitTest(self.EVENTS, (), or_)
 
     @pytest.mark.parametrize("key", [event for event in EventLabel])
     def test_getitem(self, key, fixture_sourcer):

@@ -1,12 +1,15 @@
+import os
 from abc import ABC, abstractmethod
 from collections import Counter
 from enum import Enum
-from functools import reduce
+from functools import lru_cache, reduce
 from itertools import permutations
 from operator import itemgetter, or_
 from typing import Callable, Generic, Iterable, TypeVar
 
 from lazy_pattern.error import LazyPatternError
+
+EVENT_SOURCER_CACHE_SIZE = os.environ.get("EVENT_SOURCER_CACHE_SIZE", 1024)
 
 EventLabelT = TypeVar("EventLabelT", bound=Enum)
 SourceableT = TypeVar("SourceableT")
@@ -119,14 +122,12 @@ class EventSourcer(Generic[EventLabelT, SourceableT]):
         self,
         events: dict[EventLabelT, SourceableT],
         constraints: tuple[()] | tuple[AbstractConstrainable] = (),
-        func_get_base: Callable[[], SourceableT] = lambda: {},
         func_source: Callable[[SourceableT, SourceableT], SourceableT] = or_,
         /,
     ) -> None:
 
         self.events = events
         self.constraints = constraints
-        self.func_get_base = func_get_base
         self.func_source = func_source
 
     def __getitem__(self, key: EventLabelT) -> SourceableT:
@@ -161,7 +162,18 @@ class EventSourcer(Generic[EventLabelT, SourceableT]):
 
         self.validate(event_labels)
 
-        return reduce(
-            self.func_source,
-            [self.func_get_base()] + [self.events[label] for label in event_labels],
-        )
+        return self._source(tuple(event_labels))
+
+    @lru_cache(maxsize=EVENT_SOURCER_CACHE_SIZE)
+    def _source(self, event_labels: tuple[EventLabelT, ...]) -> SourceableT:
+
+        if not event_labels:
+            raise EventSourcingConstraintError(
+                "at least one event label should be provided"
+            )
+
+        if len(event_labels) == 1:
+            return self.events[event_labels[0]]
+
+        previous = tuple(list(event_labels)[:-1])
+        return self.func_source(self._source(previous), self.events[event_labels[-1]])

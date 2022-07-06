@@ -56,11 +56,11 @@ class TestObjectPool:
             ObjectPoolConfig(
                 func_produce=lambda: self.PoolMember(),
                 retry_interval=1,
-                cool_down=2,
             )
         )
 
         async with object_pool.lease():
+            await object_pool.scale(-1)
             assert object_pool.is_cooling
 
         await asyncio.sleep(object_pool.config.cool_down * 1.2)

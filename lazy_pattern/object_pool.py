@@ -68,6 +68,9 @@ class ObjectPool(Generic[PoolMemberT]):
 
         self.is_cooling = False
 
+        if config.policy == ScalingPolicy.FIXED:
+            asyncio.create_task(self.prewarm())
+
     def __len__(self) -> int:
         return self.size
 
@@ -116,6 +119,7 @@ class ObjectPool(Generic[PoolMemberT]):
             return 0.0
         return round(usage / total, 2)
 
+    @async_lock
     async def prewarm(self) -> None:
 
         await self.scale(self.config.desired)

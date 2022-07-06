@@ -42,7 +42,6 @@ class TestObjectPool:
                 cool_down=0,
             )
         )
-        await object_pool.prewarm()
 
         members = deque()
         async for member in object_pool:
@@ -57,9 +56,9 @@ class TestObjectPool:
             ObjectPoolConfig(
                 func_produce=lambda: self.PoolMember(),
                 retry_interval=1,
+                cool_down=2,
             )
         )
-        await object_pool.prewarm()
 
         async with object_pool.lease():
             assert object_pool.is_cooling
@@ -76,10 +75,9 @@ class TestObjectPool:
                 desired=10,
             )
         )
-        await object_pool.prewarm()
 
         async with object_pool.lease():
-            assert object_pool.size == 5
+            assert object_pool.size == 3
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -103,7 +101,6 @@ class TestObjectPool:
                 cool_down=0,
             )
         )
-        await object_pool.prewarm()
 
         for _ in range(amount):
             await object_pool.fetch()
@@ -121,7 +118,6 @@ class TestObjectPool:
                 cool_down=0,
             )
         )
-        await object_pool.prewarm()
 
         for _ in range(object_pool.config.desired):
             await object_pool.fetch()
@@ -155,7 +151,6 @@ class TestObjectPool:
                 cool_down=0,
             )
         )
-        await object_pool.prewarm()
 
         for _ in range(amount):
             await object_pool.fetch()
@@ -172,7 +167,6 @@ class TestObjectPool:
                 cool_down=0,
             )
         )
-        await object_pool.prewarm()
 
         for _ in range(object_pool.config.max_size):
             await object_pool.fetch()
@@ -207,7 +201,6 @@ class TestObjectPool:
                 cool_down=0,
             )
         )
-        await object_pool.prewarm()
 
         for _ in range(amount):
             await object_pool.fetch()
@@ -224,7 +217,6 @@ class TestObjectPool:
                 cool_down=0,
             )
         )
-        await object_pool.prewarm()
 
         pool_member = await object_pool.fetch()
         assert pool_member not in object_pool.idle
@@ -244,7 +236,6 @@ class TestObjectPool:
                 cool_down=0,
             )
         )
-        await object_pool.prewarm()
 
         assert object_pool.utilization == 0
 
@@ -264,7 +255,6 @@ class TestObjectPool:
                 cool_down=0,
             )
         )
-        await object_pool.prewarm()
 
         assert all(await object_pool.project(lambda x: x in object_pool.idle))
         assert not any(await object_pool.project(lambda x: x in object_pool.busy))
